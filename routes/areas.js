@@ -22,7 +22,7 @@ router.post('/', async (req, res) => {
     }
 
     const areaId = id || `area-${Date.now()}`;
-    const short = shortName || name.split(' - ')[0] || name;
+    const short = name;
 
     const result = await db.query(
       `INSERT INTO areas (id, name, short_name)

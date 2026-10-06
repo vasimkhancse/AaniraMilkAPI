@@ -48,10 +48,12 @@ async function initDb() {
         default_morning_qty NUMERIC(8, 2) DEFAULT 1.0,
         default_evening_qty NUMERIC(8, 2) DEFAULT 0.0,
         price_per_liter NUMERIC(10, 2) DEFAULT 60.00,
+        sequence INTEGER DEFAULT 0,
         active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS sequence INTEGER DEFAULT 0;
     `);
 
     // 5. Deliveries / Daily Entries Table
@@ -103,10 +105,10 @@ async function initDb() {
     if (parseInt(areaCheck.rows[0].count, 10) === 0) {
       await client.query(`
         INSERT INTO areas (id, name, short_name) VALUES
-          ('area-1', 'Area 1 - Kovaipudur North', 'Area 1'),
-          ('area-2', 'Area 2 - Kovaipudur South', 'Area 2'),
-          ('area-3', 'Area 3 - Ashram Road', 'Area 3'),
-          ('area-4', 'Area 4 - VLB Ring Road', 'Area 4')
+          ('area-1', 'Kuniyamuthoor', 'Kuniyamuthoor'),
+          ('area-2', 'Sundakamuthur', 'Sundakamuthur'),
+          ('area-3', 'Rakindo', 'Rakindo'),
+          ('area-4', 'BK&Pirivu', 'BK&Pirivu')
         ON CONFLICT (id) DO NOTHING;
       `);
       console.log('✅ Initialized default delivery areas.');

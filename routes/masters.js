@@ -28,10 +28,11 @@ router.get('/', async (req, res) => {
         default_morning_qty::float as "defaultMorningQty", 
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
         active 
       FROM customers 
       WHERE active = true 
-      ORDER BY name ASC
+      ORDER BY COALESCE(sequence, 0) ASC, name ASC
     `);
 
     res.json({

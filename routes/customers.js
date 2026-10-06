@@ -15,6 +15,7 @@ router.get('/', async (req, res) => {
         default_morning_qty::float as "defaultMorningQty", 
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
         active,
         created_at as "createdAt"
       FROM customers 
@@ -27,13 +28,140 @@ router.get('/', async (req, res) => {
       query += ` AND area_id = $${params.length}`;
     }
 
-    query += ` ORDER BY name ASC`;
+    query += ` ORDER BY COALESCE(sequence, 0) ASC, name ASC`;
 
     const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('Error fetching customers:', err);
     res.status(500).json({ error: 'Failed to fetch customers', details: err.message });
+  }
+});
+
+// POST reorder customers sequence
+router.post('/reorder', async (req, res) => {
+  const client = await db.pool.connect();
+  try {
+    const { items, customerIds, areaId } = req.body;
+    await client.query('BEGIN');
+
+    if (Array.isArray(customerIds) && customerIds.length > 0) {
+      for (let i = 0; i < customerIds.length; i++) {
+        const custId = customerIds[i];
+        await client.query(
+          `UPDATE customers SET sequence = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+          [i + 1, custId]
+        );
+      }
+    } else if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        if (item.id) {
+          await client.query(
+            `UPDATE customers SET sequence = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            [Number(item.sequence) || 0, item.id]
+          );
+        }
+      }
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Valid customerIds array or items array is required' });
+    }
+
+    await client.query('COMMIT');
+
+    // Return updated customer list
+    let fetchQuery = `
+      SELECT 
+        id, 
+        name, 
+        phone, 
+        area_id as "areaId", 
+        default_morning_qty::float as "defaultMorningQty", 
+        default_evening_qty::float as "defaultEveningQty", 
+        price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
+        active
+      FROM customers 
+      WHERE active = true
+    `;
+    const fetchParams = [];
+    if (areaId && areaId !== 'all') {
+      fetchParams.push(areaId);
+      fetchQuery += ` AND area_id = $1`;
+    }
+    fetchQuery += ` ORDER BY COALESCE(sequence, 0) ASC, name ASC`;
+
+    const updatedRes = await db.query(fetchQuery, fetchParams);
+    res.json({ success: true, customers: updatedRes.rows });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error reordering customers:', err);
+    res.status(500).json({ error: 'Failed to reorder customers', details: err.message });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT alias for reorder
+router.put('/reorder', async (req, res) => {
+  const client = await db.pool.connect();
+  try {
+    const { items, customerIds, areaId } = req.body;
+    await client.query('BEGIN');
+
+    if (Array.isArray(customerIds) && customerIds.length > 0) {
+      for (let i = 0; i < customerIds.length; i++) {
+        const custId = customerIds[i];
+        await client.query(
+          `UPDATE customers SET sequence = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+          [i + 1, custId]
+        );
+      }
+    } else if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        if (item.id) {
+          await client.query(
+            `UPDATE customers SET sequence = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+            [Number(item.sequence) || 0, item.id]
+          );
+        }
+      }
+    } else {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Valid customerIds array or items array is required' });
+    }
+
+    await client.query('COMMIT');
+
+    let fetchQuery = `
+      SELECT 
+        id, 
+        name, 
+        phone, 
+        area_id as "areaId", 
+        default_morning_qty::float as "defaultMorningQty", 
+        default_evening_qty::float as "defaultEveningQty", 
+        price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
+        active
+      FROM customers 
+      WHERE active = true
+    `;
+    const fetchParams = [];
+    if (areaId && areaId !== 'all') {
+      fetchParams.push(areaId);
+      fetchQuery += ` AND area_id = $1`;
+    }
+    fetchQuery += ` ORDER BY COALESCE(sequence, 0) ASC, name ASC`;
+
+    const updatedRes = await db.query(fetchQuery, fetchParams);
+    res.json({ success: true, customers: updatedRes.rows });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error reordering customers:', err);
+    res.status(500).json({ error: 'Failed to reorder customers', details: err.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -50,6 +178,7 @@ router.get('/:id', async (req, res) => {
         default_morning_qty::float as "defaultMorningQty", 
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
         active 
       FROM customers 
       WHERE id = $1
@@ -76,6 +205,7 @@ router.post('/', async (req, res) => {
       defaultMorningQty,
       defaultEveningQty,
       pricePerLiter,
+      sequence,
     } = req.body;
 
     if (!name || !name.trim()) {
@@ -95,12 +225,23 @@ router.post('/', async (req, res) => {
     const morningQty = parseFloat(defaultMorningQty) || 0;
     const eveningQty = parseFloat(defaultEveningQty) || 0;
     const rate = parseFloat(pricePerLiter) || 60.0;
+    const targetArea = areaId || 'area-1';
+
+    // If sequence is provided use it; otherwise auto-assign next sequence in that area
+    let seqVal = sequence !== undefined && sequence !== null ? parseInt(sequence, 10) : null;
+    if (seqVal === null || isNaN(seqVal)) {
+      const maxRes = await db.query(
+        'SELECT COALESCE(MAX(sequence), 0) + 1 as next_seq FROM customers WHERE area_id = $1',
+        [targetArea]
+      );
+      seqVal = parseInt(maxRes.rows[0]?.next_seq, 10) || 1;
+    }
 
     const result = await db.query(`
       INSERT INTO customers (
-        id, name, phone, area_id, default_morning_qty, default_evening_qty, price_per_liter, active
+        id, name, phone, area_id, default_morning_qty, default_evening_qty, price_per_liter, sequence, active
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         phone = EXCLUDED.phone,
@@ -108,6 +249,7 @@ router.post('/', async (req, res) => {
         default_morning_qty = EXCLUDED.default_morning_qty,
         default_evening_qty = EXCLUDED.default_evening_qty,
         price_per_liter = EXCLUDED.price_per_liter,
+        sequence = EXCLUDED.sequence,
         active = true,
         updated_at = CURRENT_TIMESTAMP
       RETURNING 
@@ -118,15 +260,17 @@ router.post('/', async (req, res) => {
         default_morning_qty::float as "defaultMorningQty", 
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
         active
     `, [
       customerId,
       name.trim(),
       formattedPhone,
-      areaId || 'area-1',
+      targetArea,
       morningQty,
       eveningQty,
       rate,
+      seqVal,
     ]);
 
     res.status(201).json(result.rows[0]);
@@ -147,6 +291,7 @@ router.put('/:id', async (req, res) => {
       defaultMorningQty,
       defaultEveningQty,
       pricePerLiter,
+      sequence,
       active,
     } = req.body;
 
@@ -165,6 +310,10 @@ router.put('/:id', async (req, res) => {
         : `+91 ${cleanPhone.slice(-10)}`;
     }
 
+    const seqVal = sequence !== undefined && sequence !== null && !isNaN(parseInt(sequence, 10))
+      ? parseInt(sequence, 10)
+      : null;
+
     const result = await db.query(`
       UPDATE customers 
       SET 
@@ -174,9 +323,10 @@ router.put('/:id', async (req, res) => {
         default_morning_qty = COALESCE($4, default_morning_qty),
         default_evening_qty = COALESCE($5, default_evening_qty),
         price_per_liter = COALESCE($6, price_per_liter),
-        active = COALESCE($7, active),
+        sequence = COALESCE($7, sequence),
+        active = COALESCE($8, active),
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $8
+      WHERE id = $9
       RETURNING 
         id, 
         name, 
@@ -185,6 +335,7 @@ router.put('/:id', async (req, res) => {
         default_morning_qty::float as "defaultMorningQty", 
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
         active
     `, [
       name ? name.trim() : null,
@@ -193,6 +344,7 @@ router.put('/:id', async (req, res) => {
       defaultMorningQty !== undefined ? parseFloat(defaultMorningQty) : null,
       defaultEveningQty !== undefined ? parseFloat(defaultEveningQty) : null,
       pricePerLiter !== undefined ? parseFloat(pricePerLiter) : null,
+      seqVal,
       active,
       id,
     ]);

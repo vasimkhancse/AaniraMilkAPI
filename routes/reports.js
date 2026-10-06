@@ -15,7 +15,8 @@ router.get('/monthly-summary', async (req, res) => {
         c.name as "customerName",
         c.phone,
         c.area_id as "areaId",
-        c.price_per_liter::float as "pricePerLiter"
+        c.price_per_liter::float as "pricePerLiter",
+        COALESCE(c.sequence, 0)::int as "sequence"
       FROM customers c
       WHERE c.active = true
     `;
@@ -24,7 +25,7 @@ router.get('/monthly-summary', async (req, res) => {
       custParams.push(areaId);
       custQuery += ` AND c.area_id = $${custParams.length}`;
     }
-    custQuery += ` ORDER BY c.name ASC`;
+    custQuery += ` ORDER BY COALESCE(c.sequence, 0) ASC, c.name ASC`;
 
     const customersResult = await db.query(custQuery, custParams);
     const customers = customersResult.rows;
@@ -41,7 +42,8 @@ router.get('/monthly-summary', async (req, res) => {
         d.rate::float as "rate",
         d.amount::float as "amount",
         d.supply_boy_id as "supplyBoyId",
-        COALESCE(d.area_id, c.area_id) as "areaId"
+        COALESCE(d.area_id, c.area_id) as "areaId",
+        COALESCE(c.sequence, 0)::int as "sequence"
       FROM deliveries d
       LEFT JOIN customers c ON d.customer_id = c.id
       WHERE TO_CHAR(d.date, 'YYYY-MM') = $1
@@ -66,6 +68,7 @@ router.get('/monthly-summary', async (req, res) => {
         customerName: c.customerName,
         phone: c.phone || '',
         areaId: c.areaId,
+        sequence: c.sequence || 0,
         totalMilk: 0,
         totalAmount: 0,
         deliveryCount: 0,
@@ -80,6 +83,7 @@ router.get('/monthly-summary', async (req, res) => {
           customerName: del.customerName || 'Customer',
           phone: '',
           areaId: del.areaId || 'area-1',
+          sequence: del.sequence || 0,
           totalMilk: 0,
           totalAmount: 0,
           deliveryCount: 0,
@@ -99,7 +103,7 @@ router.get('/monthly-summary', async (req, res) => {
         totalMilk: Number(c.totalMilk.toFixed(2)),
         totalAmount: Math.round(c.totalAmount),
       }))
-      .sort((a, b) => b.totalMilk - a.totalMilk);
+      .sort((a, b) => (a.sequence || 0) - (b.sequence || 0) || a.customerName.localeCompare(b.customerName));
 
     const grandTotalMilk = customerSummaries.reduce((sum, c) => sum + c.totalMilk, 0);
     const grandTotalAmount = customerSummaries.reduce((sum, c) => sum + c.totalAmount, 0);
