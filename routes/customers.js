@@ -17,7 +17,8 @@ router.get('/', async (req, res) => {
         price_per_liter::float as "pricePerLiter", 
         COALESCE(sequence, 0)::int as "sequence",
         active,
-        created_at as "createdAt"
+        created_at as "createdAt",
+        updated_at as "updatedAt"
       FROM customers 
       WHERE active = true
     `;
@@ -179,7 +180,9 @@ router.get('/:id', async (req, res) => {
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
         COALESCE(sequence, 0)::int as "sequence",
-        active 
+        active,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
       FROM customers 
       WHERE id = $1
     `, [id]);
@@ -221,7 +224,7 @@ router.post('/', async (req, res) => {
       ? `+91 ${cleanPhone.slice(2)}`
       : `+91 ${cleanPhone.slice(-10)}`;
 
-    const customerId = id || `cust-${Date.now()}`;
+    const customerId = (id && typeof id === 'string' && id.trim()) ? id.trim() : `cust-${Date.now()}`;
     const morningQty = parseFloat(defaultMorningQty) || 0;
     const eveningQty = parseFloat(defaultEveningQty) || 0;
     const rate = parseFloat(pricePerLiter) || 60.0;
@@ -239,9 +242,12 @@ router.post('/', async (req, res) => {
 
     const result = await db.query(`
       INSERT INTO customers (
-        id, name, phone, area_id, default_morning_qty, default_evening_qty, price_per_liter, sequence, active
+        id, name, phone, area_id, default_morning_qty, default_evening_qty, price_per_liter, sequence, active, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      VALUES (
+        COALESCE($1, 'cust-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint || '-' || floor(random() * 1000)::int),
+        $2, $3, $4, $5, $6, $7, $8, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+      )
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         phone = EXCLUDED.phone,
@@ -261,7 +267,9 @@ router.post('/', async (req, res) => {
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
         COALESCE(sequence, 0)::int as "sequence",
-        active
+        active,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
     `, [
       customerId,
       name.trim(),
@@ -336,7 +344,9 @@ router.put('/:id', async (req, res) => {
         default_evening_qty::float as "defaultEveningQty", 
         price_per_liter::float as "pricePerLiter", 
         COALESCE(sequence, 0)::int as "sequence",
-        active
+        active,
+        created_at as "createdAt",
+        updated_at as "updatedAt"
     `, [
       name ? name.trim() : null,
       formattedPhone !== undefined ? formattedPhone : phone,

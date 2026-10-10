@@ -41,7 +41,7 @@ async function initDb() {
     // 4. Customers Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS customers (
-        id VARCHAR(100) PRIMARY KEY,
+        id VARCHAR(100) PRIMARY KEY DEFAULT ('cust-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint || '-' || floor(random() * 1000)::int),
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(50),
         area_id VARCHAR(100) REFERENCES areas(id) ON DELETE SET NULL,
@@ -54,6 +54,11 @@ async function initDb() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS sequence INTEGER DEFAULT 0;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE customers ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE customers ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE customers ALTER COLUMN id SET DEFAULT ('cust-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint || '-' || floor(random() * 1000)::int);
     `);
 
     // 5. Deliveries / Daily Entries Table
@@ -108,7 +113,8 @@ async function initDb() {
           ('area-1', 'Kuniyamuthoor', 'Kuniyamuthoor'),
           ('area-2', 'Sundakamuthur', 'Sundakamuthur'),
           ('area-3', 'Rakindo', 'Rakindo'),
-          ('area-4', 'BK&Pirivu', 'BK&Pirivu')
+          ('area-4', 'BK&Pirivu', 'BK&Pirivu'),
+          ('area-5', 'Kovaipudur', 'Kovaipudur')
         ON CONFLICT (id) DO NOTHING;
       `);
       console.log('✅ Initialized default delivery areas.');
@@ -119,10 +125,10 @@ async function initDb() {
     if (parseInt(userCheck.rows[0].count, 10) === 0) {
       await client.query(`
         INSERT INTO users (id,name, role, assigned_area, phone) VALUES
-          ('admin', 'Store Admin', 'admin', 'all', '+91 99440 00000'),
-          ('ravi_sb', 'Ravi Kumar', 'supply_boy', 'area-1', '+91 98765 43210'),
-          ('bala_sb', 'Bala Murugan', 'supply_boy', 'area-2', '+91 98456 12345'),
-          ('kumar_sb', 'Kumar Logan', 'supply_boy', 'area-3', '+91 97890 12345')
+          ('admin', 'Admin', 'admin', 'all', '+91 99440 00000'),
+          ('jgtst001', 'Jegtish', 'supply_boy', 'area-1', '+91 98765 43210'),
+          ('aki001', 'Aki', 'supply_boy', 'area-2', '+91 98456 12345'),
+          ('kth001', 'Karthik', 'supply_boy', 'area-3', '+91 97890 12345')
         ON CONFLICT (id) DO NOTHING;
       `);
       console.log('✅ Initialized default staff users.');
