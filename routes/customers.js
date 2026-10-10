@@ -225,6 +225,18 @@ router.post('/', async (req, res) => {
       : `+91 ${cleanPhone.slice(-10)}`;
 
     const customerId = (id && typeof id === 'string' && id.trim()) ? id.trim() : `cust-${Date.now()}`;
+
+    // Check if phone number is already used by another customer
+    const phoneCheck = await db.query(
+      'SELECT id, name FROM customers WHERE phone = $1 AND id != $2',
+      [formattedPhone, customerId]
+    );
+    if (phoneCheck.rows.length > 0) {
+      return res.status(400).json({
+        error: `Phone number is already registered to customer "${phoneCheck.rows[0].name}"`,
+      });
+    }
+
     const morningQty = parseFloat(defaultMorningQty) || 0;
     const eveningQty = parseFloat(defaultEveningQty) || 0;
     const rate = parseFloat(pricePerLiter) || 60.0;
@@ -284,6 +296,9 @@ router.post('/', async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Error creating customer:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Phone number is already registered to another customer' });
+    }
     res.status(500).json({ error: 'Failed to create customer', details: err.message });
   }
 });
@@ -316,6 +331,17 @@ router.put('/:id', async (req, res) => {
       formattedPhone = cleanPhone.startsWith('91') && cleanPhone.length === 12
         ? `+91 ${cleanPhone.slice(2)}`
         : `+91 ${cleanPhone.slice(-10)}`;
+
+      // Check if another customer already has this phone number
+      const phoneCheck = await db.query(
+        'SELECT id, name FROM customers WHERE phone = $1 AND id != $2',
+        [formattedPhone, id]
+      );
+      if (phoneCheck.rows.length > 0) {
+        return res.status(400).json({
+          error: `Phone number is already registered to customer "${phoneCheck.rows[0].name}"`,
+        });
+      }
     }
 
     const seqVal = sequence !== undefined && sequence !== null && !isNaN(parseInt(sequence, 10))
@@ -366,6 +392,9 @@ router.put('/:id', async (req, res) => {
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Error updating customer:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Phone number is already registered to another customer' });
+    }
     res.status(500).json({ error: 'Failed to update customer', details: err.message });
   }
 });

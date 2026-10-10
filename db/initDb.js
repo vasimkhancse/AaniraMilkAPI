@@ -43,7 +43,7 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS customers (
         id VARCHAR(100) PRIMARY KEY DEFAULT ('cust-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint || '-' || floor(random() * 1000)::int),
         name VARCHAR(255) NOT NULL,
-        phone VARCHAR(50),
+        phone VARCHAR(50) UNIQUE,
         area_id VARCHAR(100) REFERENCES areas(id) ON DELETE SET NULL,
         default_morning_qty NUMERIC(8, 2) DEFAULT 1.0,
         default_evening_qty NUMERIC(8, 2) DEFAULT 0.0,
