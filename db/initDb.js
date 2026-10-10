@@ -41,7 +41,7 @@ async function initDb() {
     // 4. Customers Table
     await client.query(`
       CREATE TABLE IF NOT EXISTS customers (
-        id VARCHAR(100) PRIMARY KEY DEFAULT ('cust-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint || '-' || floor(random() * 1000)::int),
+        id VARCHAR(100) PRIMARY KEY DEFAULT ('cust-' || gen_random_uuid()::text),
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(50) UNIQUE,
         area_id VARCHAR(100) REFERENCES areas(id) ON DELETE SET NULL,
@@ -58,7 +58,7 @@ async function initDb() {
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE customers ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
       ALTER TABLE customers ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
-      ALTER TABLE customers ALTER COLUMN id SET DEFAULT ('cust-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint || '-' || floor(random() * 1000)::int);
+      ALTER TABLE customers ALTER COLUMN id SET DEFAULT ('cust-' || gen_random_uuid()::text);
     `);
 
     // 5. Deliveries / Daily Entries Table
