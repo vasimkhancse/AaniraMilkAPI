@@ -85,6 +85,35 @@ router.post('/rate', async (req, res) => {
   }
 });
 
+// Update Rate by Area
+router.post('/rate-by-area', async (req, res) => {
+  try {
+    const { areaId, pricePerLiter } = req.body;
+    if (!areaId) {
+      return res.status(400).json({ error: 'areaId is required' });
+    }
+    const rateNum = Number(pricePerLiter);
+    if (isNaN(rateNum) || rateNum <= 0) {
+      return res.status(400).json({ error: 'Valid pricePerLiter is required' });
+    }
+
+    let query = 'UPDATE customers SET price_per_liter = $1, updated_at = CURRENT_TIMESTAMP WHERE active = true';
+    const params = [rateNum];
+
+    if (areaId !== 'all') {
+      params.push(areaId);
+      query += ` AND area_id = $2`;
+    }
+
+    await db.query(query, params);
+
+    res.json({ success: true, areaId, pricePerLiter: rateNum });
+  } catch (err) {
+    console.error('Error saving area rate:', err);
+    res.status(500).json({ error: 'Failed to save area rate', details: err.message });
+  }
+});
+
 // Update Settings Generic
 router.post('/settings', async (req, res) => {
   try {

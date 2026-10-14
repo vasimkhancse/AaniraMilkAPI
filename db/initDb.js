@@ -111,10 +111,9 @@ async function initDb() {
       await client.query(`
         INSERT INTO areas (id, name, short_name) VALUES
           ('area-1', 'Kuniyamuthoor', 'Kuniyamuthoor'),
-          ('area-2', 'Sundakamuthur', 'Sundakamuthur'),
-          ('area-3', 'Rakindo', 'Rakindo'),
-          ('area-4', 'BK&Pirivu', 'BK&Pirivu'),
-          ('area-5', 'Kovaipudur', 'Kovaipudur')
+          ('area-2', 'BK Pudur', 'BKPudur'),
+          ('area-3', 'Sundakamuthur', 'Sundakamuthur'),
+          ('area-4', 'Kovaipudur', 'Kovaipudur')
         ON CONFLICT (id) DO NOTHING;
       `);
       console.log('✅ Initialized default delivery areas.');

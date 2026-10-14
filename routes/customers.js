@@ -39,6 +39,52 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST update rate for all customers in a specific area
+router.post('/update-area-rate', async (req, res) => {
+  try {
+    const { areaId, pricePerLiter } = req.body;
+    if (!areaId) {
+      return res.status(400).json({ error: 'areaId is required' });
+    }
+    const rateNum = Number(pricePerLiter);
+    if (isNaN(rateNum) || rateNum <= 0) {
+      return res.status(400).json({ error: 'Valid pricePerLiter is required' });
+    }
+
+    let query = 'UPDATE customers SET price_per_liter = $1, updated_at = CURRENT_TIMESTAMP WHERE active = true';
+    const params = [rateNum];
+
+    if (areaId !== 'all') {
+      params.push(areaId);
+      query += ` AND area_id = $2`;
+    }
+
+    await db.query(query, params);
+
+    // Fetch and return updated customers
+    const updatedRes = await db.query(`
+      SELECT 
+        id, 
+        name, 
+        phone, 
+        area_id as "areaId", 
+        default_morning_qty::float as "defaultMorningQty", 
+        default_evening_qty::float as "defaultEveningQty", 
+        price_per_liter::float as "pricePerLiter", 
+        COALESCE(sequence, 0)::int as "sequence",
+        active
+      FROM customers 
+      WHERE active = true 
+      ORDER BY COALESCE(sequence, 0) ASC, name ASC
+    `);
+
+    res.json({ success: true, areaId, pricePerLiter: rateNum, customers: updatedRes.rows });
+  } catch (err) {
+    console.error('Error updating area rates:', err);
+    res.status(500).json({ error: 'Failed to update area rates', details: err.message });
+  }
+});
+
 // POST reorder customers sequence
 router.post('/reorder', async (req, res) => {
   const client = await db.pool.connect();
