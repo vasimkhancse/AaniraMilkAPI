@@ -100,7 +100,7 @@ router.get('/monthly-summary', async (req, res) => {
     const customerSummaries = Object.values(customerMap)
       .map((c) => ({
         ...c,
-        totalMilk: Number(c.totalMilk.toFixed(2)),
+        totalMilk: Math.round(c.totalMilk * 100) / 100,
         totalAmount: Math.round(c.totalAmount),
       }))
       .sort((a, b) => (a.sequence || 0) - (b.sequence || 0) || a.customerName.localeCompare(b.customerName));
@@ -112,7 +112,7 @@ router.get('/monthly-summary', async (req, res) => {
     res.json({
       month: targetMonth,
       totalCustomers: activeCustomersCount,
-      totalMilk: Number(grandTotalMilk.toFixed(2)),
+      totalMilk: Math.round(grandTotalMilk * 100) / 100,
       totalAmount: grandTotalAmount,
       customerSummaries,
     });
@@ -180,7 +180,7 @@ router.get('/customer-bill', async (req, res) => {
       customer,
       month: targetMonth,
       entries,
-      totalMilk: Number(totalMilk.toFixed(2)),
+      totalMilk: Math.round(totalMilk * 100) / 100,
       totalAmount: Math.round(totalAmount),
     });
   } catch (err) {

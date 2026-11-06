@@ -76,7 +76,8 @@ router.post('/batch', async (req, res) => {
         const custId = item.customerId;
         const itemDate = item.date || date;
         const itemShift = item.shift || shift;
-        const qty = parseFloat(item.qty) || 0;
+        const rawQty = item.qty !== undefined && item.qty !== null ? item.qty : 0;
+        const qty = Math.max(0, parseFloat(rawQty) || 0);
         const rate = parseFloat(item.rate) || 60;
         const amount = Math.round(qty * rate);
         const sbId = item.supplyBoyId || supplyBoyId || 'admin';
@@ -84,41 +85,33 @@ router.post('/batch', async (req, res) => {
         const custName = item.customerName || '';
         const entryId = item.id || `del-${custId}-${itemDate}-${itemShift.toLowerCase()}`;
 
-        if (qty > 0) {
-          // Upsert delivery
-          await client.query(`
-            INSERT INTO deliveries (
-              id, customer_id, customer_name, date, shift, qty, rate, amount, supply_boy_id, area_id, recorded_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
-            ON CONFLICT (customer_id, date, shift) DO UPDATE SET
-              qty = EXCLUDED.qty,
-              rate = EXCLUDED.rate,
-              amount = EXCLUDED.amount,
-              customer_name = COALESCE(EXCLUDED.customer_name, deliveries.customer_name),
-              supply_boy_id = EXCLUDED.supply_boy_id,
-              area_id = EXCLUDED.area_id,
-              recorded_at = CURRENT_TIMESTAMP
-          `, [
-            entryId,
-            custId,
-            custName,
-            itemDate,
-            itemShift,
-            qty,
-            rate,
-            amount,
-            sbId,
-            aId,
-          ]);
-          count++;
-        } else {
-          // If qty is 0, delete any existing record for this customer, date, and shift
-          await client.query(`
-            DELETE FROM deliveries
-            WHERE customer_id = $1 AND date = $2 AND LOWER(shift) = LOWER($3)
-          `, [custId, itemDate, itemShift]);
-        }
+        // Upsert delivery (0 is a valid quantity, not empty/null)
+        await client.query(`
+          INSERT INTO deliveries (
+            id, customer_id, customer_name, date, shift, qty, rate, amount, supply_boy_id, area_id, recorded_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+          ON CONFLICT (customer_id, date, shift) DO UPDATE SET
+            qty = EXCLUDED.qty,
+            rate = EXCLUDED.rate,
+            amount = EXCLUDED.amount,
+            customer_name = COALESCE(EXCLUDED.customer_name, deliveries.customer_name),
+            supply_boy_id = EXCLUDED.supply_boy_id,
+            area_id = EXCLUDED.area_id,
+            recorded_at = CURRENT_TIMESTAMP
+        `, [
+          entryId,
+          custId,
+          custName,
+          itemDate,
+          itemShift,
+          qty,
+          rate,
+          amount,
+          sbId,
+          aId,
+        ]);
+        count++;
       }
       return count;
     });
